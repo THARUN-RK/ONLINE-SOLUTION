@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#090d18">
+  <meta name="description" content="A reproducible Apache Kafka gaming analytics research prototype with PostgreSQL, FastAPI, and a live Streamlit dashboard.">
+  <title>Gaming Stream Analytics | Kafka Research Prototype</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #090d18;
+      --panel: #111827;
+      --panel-soft: #151f30;
+      --text: #edf2ff;
+      --muted: #9aa8c2;
+      --line: #27344a;
+      --cyan: #54e6d2;
+      --violet: #9d8bff;
+      --green: #94f0b0;
+      --max: 1120px;
+    }
+
+    * { box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      margin: 0;
+      background:
+        radial-gradient(ellipse at 75% 0%, rgb(91 81 180 / 18%), transparent 36rem),
+        radial-gradient(ellipse at 10% 12%, rgb(36 186 172 / 10%), transparent 32rem),
+        var(--bg);
+      color: var(--text);
+      font: 16px/1.65 "Segoe UI", Inter, system-ui, -apple-system, sans-serif;
+    }
+
+    a { color: var(--cyan); text-underline-offset: 4px; }
+    a:hover { color: #a4fff2; }
+
+    .wrap { width: min(var(--max), calc(100% - 40px)); margin-inline: auto; }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      padding-block: 22px;
+      border-bottom: 1px solid rgb(154 168 194 / 14%);
+    }
+
+    .brand { color: var(--text); font-weight: 750; letter-spacing: .02em; text-decoration: none; }
+    .nav { display: flex; flex-wrap: wrap; gap: 20px; font-size: .9rem; }
+    .nav a { color: var(--muted); text-decoration: none; }
+    .nav a:hover { color: var(--text); }
+
+    .hero { padding-block: clamp(72px, 12vw, 132px) 76px; }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      margin: 0 0 20px;
+      color: var(--cyan);
+      font-size: .78rem;
+      font-weight: 750;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+    }
+
+    .pulse {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 16px rgb(148 240 176 / 75%);
+    }
+
+    h1 {
+      max-width: 900px;
+      margin: 0;
+      font-size: clamp(2.6rem, 7vw, 5.2rem);
+      line-height: 1.04;
+      letter-spacing: -.055em;
+    }
+
+    .gradient {
+      background: linear-gradient(100deg, var(--cyan), #b5a7ff 72%);
+      background-clip: text;
+      color: transparent;
+    }
+
+    .lede { max-width: 720px; margin: 24px 0 0; color: var(--muted); font-size: 1.13rem; }
+    .actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 30px; }
+
+    .button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 46px;
+      padding: 10px 17px;
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      color: var(--text);
+      font-weight: 700;
+      text-decoration: none;
+      background: rgb(17 24 39 / 75%);
+    }
+
+    .button.primary {
+      border-color: transparent;
+      background: linear-gradient(100deg, #287f81, #6253b7);
+    }
+
+    .button:hover { transform: translateY(-1px); }
+
+    .note {
+      max-width: 790px;
+      margin-top: 24px;
+      padding: 12px 15px;
+      border-left: 3px solid var(--violet);
+      color: var(--muted);
+      background: rgb(157 139 255 / 7%);
+      font-size: .9rem;
+    }
+
+    section { padding-block: 48px; }
+
+    .section-heading { max-width: 680px; margin-bottom: 26px; }
+    .section-heading h2 { margin: 0; font-size: clamp(1.7rem, 4vw, 2.45rem); letter-spacing: -.035em; }
+    .section-heading p { margin: 9px 0 0; color: var(--muted); }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 12px;
+      align-items: stretch;
+    }
+
+    .stage, .card, .metric {
+      border: 1px solid var(--line);
+      border-radius: 13px;
+      background: linear-gradient(160deg, rgb(21 31 48 / 92%), rgb(15 22 35 / 92%));
+    }
+
+    .stage { min-height: 142px; padding: 17px; }
+    .stage .step { color: var(--cyan); font-size: .75rem; font-weight: 800; letter-spacing: .12em; }
+    .stage h3 { margin: 9px 0 5px; font-size: 1rem; }
+    .stage p { margin: 0; color: var(--muted); font-size: .86rem; }
+
+    .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 15px; }
+    .card { padding: 21px; }
+    .card h3 { margin: 0 0 8px; font-size: 1.05rem; }
+    .card p { margin: 0; color: var(--muted); font-size: .92rem; }
+
+    .metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+    .metric { padding: 17px; }
+    .metric strong { display: block; color: var(--cyan); font-size: 1.35rem; letter-spacing: -.03em; }
+    .metric span { display: block; margin-top: 4px; color: var(--muted); font-size: .84rem; }
+
+    .caveat { margin: 16px 0 0; color: var(--muted); font-size: .88rem; }
+    .commands { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px; }
+    .command { overflow: hidden; border: 1px solid var(--line); border-radius: 11px; background: #0c1220; }
+    .command h3 { margin: 0; padding: 11px 14px; border-bottom: 1px solid var(--line); color: var(--muted); font-size: .85rem; }
+    pre { overflow-x: auto; margin: 0; padding: 14px; color: #c9d6f1; font-size: .84rem; }
+
+    .docs { display: flex; flex-wrap: wrap; gap: 12px; }
+
+    footer {
+      margin-top: 48px;
+      padding-block: 26px 36px;
+      border-top: 1px solid rgb(154 168 194 / 14%);
+      color: var(--muted);
+      font-size: .86rem;
+    }
+
+    @media (max-width: 800px) {
+      .flow { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+
+    @media (max-width: 560px) {
+      .wrap { width: min(100% - 28px, var(--max)); }
+      .topbar { align-items: flex-start; flex-direction: column; }
+      .nav { gap: 15px; }
+      .flow, .grid, .metrics, .commands { grid-template-columns: 1fr; }
+      .stage { min-height: 0; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      *, *::before, *::after { transition-duration: .01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <header class="wrap topbar">
+    <a class="brand" href="#top">GAME / STREAM</a>
+    <nav class="nav" aria-label="Main navigation">
+      <a href="#architecture">Architecture</a>
+      <a href="#evaluation">Evaluation</a>
+      <a href="#quickstart">Quick start</a>
+      <a href="#research">Research</a>
+    </nav>
+  </header>
+
+  <main id="top">
+    <section class="wrap hero">
+      <p class="eyebrow"><span class="pulse" aria-hidden="true"></span> Streaming analytics research prototype</p>
+      <h1>Online gaming data.<br><span class="gradient">Processed in real time.</span></h1>
+      <p class="lede">A reproducible event-stream platform that sends simulated game activity through Apache Kafka, validates and stores it in PostgreSQL, and serves analytics to a live dashboard.</p>
+      <div class="actions">
+        <a class="button primary" href="https://github.com/THARUN-RK/large-scale-online-gaming">View project on GitHub</a>
+        <a class="button" href="#quickstart">Run the prototype</a>
+      </div>
+      <p class="note">This GitHub Pages site is a static project overview. The Streamlit dashboard and FastAPI service run with the local Docker Compose stack; this page does not claim to host a live data feed.</p>
+    </section>
+
+    <section class="wrap" id="architecture">
+      <div class="section-heading">
+        <h2>One event stream, end to end</h2>
+        <p>Domain topics keep game activity organized while the consumer validates, cleans, and persists each event before committing its offset.</p>
+      </div>
+      <div class="flow" aria-label="Data flow from event generation to dashboard">
+        <article class="stage"><span class="step">01 / GENERATE</span><h3>Gaming simulator</h3><p>Player, score, purchase, session, and achievement events.</p></article>
+        <article class="stage"><span class="step">02 / STREAM</span><h3>Kafka on KRaft</h3><p>Keyed events in domain-specific topics plus a dead-letter topic.</p></article>
+        <article class="stage"><span class="step">03 / PROCESS</span><h3>Validate &amp; deduplicate</h3><p>Python consumer normalizes records and isolates invalid messages.</p></article>
+        <article class="stage"><span class="step">04 / STORE</span><h3>PostgreSQL</h3><p>Transactional event storage and relational gaming facts.</p></article>
+        <article class="stage"><span class="step">05 / VISUALIZE</span><h3>API &amp; dashboard</h3><p>FastAPI analytics feed an auto-refreshing Streamlit dashboard.</p></article>
+      </div>
+    </section>
+
+    <section class="wrap">
+      <div class="section-heading">
+        <h2>Designed for data quality</h2>
+        <p>Reliability behavior is explicit, testable, and documented rather than hidden behind success-shaped fallbacks.</p>
+      </div>
+      <div class="grid">
+        <article class="card"><h3>Contract validation</h3><p>Timezone-aware timestamps, supported event types, and event-specific fields are checked before persistence.</p></article>
+        <article class="card"><h3>Duplicate protection</h3><p>Stable event identifiers and a database uniqueness constraint make redelivery safe for stored effects.</p></article>
+        <article class="card"><h3>Dead-letter handling</h3><p>Invalid payloads retain their rejection reason and are acknowledged by Kafka before offsets advance.</p></article>
+        <article class="card"><h3>Operational analytics</h3><p>Track active players, scores, sessions, purchases, pipeline throughput, latency, and consumer lag.</p></article>
+        <article class="card"><h3>Automated refresh</h3><p>The dashboard queries the API on a refresh interval and reports API or broker failures explicitly.</p></article>
+        <article class="card"><h3>Reproducible inputs</h3><p>Seeded event generation and documented setup help repeat local tests and benchmark trials.</p></article>
+      </div>
+    </section>
+
+    <section class="wrap" id="evaluation">
+      <div class="section-heading">
+        <h2>Measured carefully</h2>
+        <p>A local microbenchmark is reported separately from the distributed system evaluation that still requires a running Kafka/PostgreSQL deployment.</p>
+      </div>
+      <div class="metrics">
+        <div class="metric"><strong>200.58 / s</strong><span>Median stored events per second; five local SQLite trials</span></div>
+        <div class="metric"><strong>3.488 ms</strong><span>Median of trial median per-event database latency</span></div>
+        <div class="metric"><strong>6.888 ms</strong><span>Median trial p95 per-event database latency</span></div>
+      </div>
+      <p class="caveat">These figures measure Python preprocessing and in-memory SQLite on the authoring machine. They exclude Kafka, network, PostgreSQL service, and dashboard latency; they are not production-scale results. See the evaluation report for ranges, machine context, and limitations.</p>
+    </section>
+
+    <section class="wrap" id="quickstart">
+      <div class="section-heading">
+        <h2>Run it locally</h2>
+        <p>Requires Python 3.13 and Docker Desktop with Compose v2.</p>
+      </div>
+      <div class="commands">
+        <div class="command"><h3>1 / Prepare</h3><pre><code>py -3.13 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt</code></pre></div>
+        <div class="command"><h3>2 / Start the pipeline</h3><pre><code>docker compose up --build</code></pre></div>
+      </div>
+      <p class="caveat">Compose starts the Kafka KRaft broker, PostgreSQL, producer, consumer, API, and dashboard. Open the dashboard at <code>http://localhost:8501</code> and API docs at <code>http://localhost:8000/docs</code>. Do not expose the development credentials or plaintext listeners to the Internet.</p>
+    </section>
+
+    <section class="wrap" id="research">
+      <div class="section-heading">
+        <h2>Research &amp; project files</h2>
+        <p>Implementation, diagrams, paper, and evaluation methodology are available in the repository.</p>
+      </div>
+      <div class="docs">
+        <a class="button" href="https://github.com/THARUN-RK/large-scale-online-gaming/blob/main/README.md">Project README</a>
+        <a class="button" href="https://github.com/THARUN-RK/large-scale-online-gaming/blob/main/docs/research-paper.md">IEEE-style paper</a>
+        <a class="button" href="https://github.com/THARUN-RK/large-scale-online-gaming/blob/main/docs/architecture.md">Architecture diagrams</a>
+        <a class="button" href="https://github.com/THARUN-RK/large-scale-online-gaming/blob/main/docs/performance-evaluation.md">Performance evaluation</a>
+        <a class="button" href="https://github.com/THARUN-RK/large-scale-online-gaming/tree/main/src">Source code</a>
+      </div>
+      <p class="caveat">Tharun R K, Teju K G, Tharun K, and Tejas S · Department of Computer Science and Engineering · Sapthagiri NPS University, Bengaluru, India</p>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">Academic prototype for reproducible streaming analytics. A single-node development stack is not a highly available production cluster.</div>
+  </footer>
+</body>
+</html>

@@ -2,6 +2,8 @@
 
 **Research prototype:** a working event-stream pipeline using Apache Kafka, Python, PostgreSQL, FastAPI, and Streamlit.
 
+**Project site:** <https://tharun-rk.github.io/large-scale-online-gaming/>
+
 **Authors:** Tharun R K, Teju K G, Tharun K, and Tejas S<br>
 **Department:** Computer Science and Engineering, Sapthagiri NPS University, Bengaluru, India
 
