@@ -1,96 +1,188 @@
-# Large-Scale Online Gaming Data Processing and Visualization Dashboard
+# Large-Scale Online Gaming Data Processing and Visualization
 
-This project demonstrates a real-time gaming analytics architecture using Apache Kafka, stream aggregation, and a live dashboard. It is designed around the scenario described in the abstract: online game events are ingested as streams, aggregated into operational KPIs, and displayed in a real-time operator dashboard.
+**Research prototype:** a working event-stream pipeline using Apache Kafka, Python, PostgreSQL, FastAPI, and Streamlit.
 
-## Features
+**Authors:** Tharun R K, Teju K G, Tharun K, and Tejas S<br>
+**Department:** Computer Science and Engineering, Sapthagiri NPS University, Bengaluru, India
 
-- Simulated gaming event producer using Kafka
-- Real-time event consumption and KPI aggregation
-- Metrics for:
-  - concurrent users
-  - matchmaking wait time
-  - economy volume
-  - error rate
-  - regional usage
-- Streamlit dashboard for live monitoring
-- Docker Compose setup for Kafka and Zookeeper
+## Research concept
+
+Game telemetry is generated continuously and arrives faster than a periodic file-based dashboard can reliably represent. This project simulates game-service events, publishes them to domain-specific Kafka topics, validates and deduplicates them in a consumer, persists accepted records and related facts in PostgreSQL, and serves live analytics through FastAPI to an auto-refreshing Streamlit dashboard.
+
+The local deployment demonstrates integration and data-quality handling. It is not a multi-broker production cluster, and no production-scale throughput or fault-tolerance claim is made. See the [complete IEEE-style research paper](docs/research-paper.md) and [architecture, data-flow, use-case, and ER diagrams](docs/architecture.md).
 
 ## Architecture
 
-- Event producers: game servers, matchmaking services, economy services
-- Kafka topic: `gaming-events`
-- Consumer/aggregator: calculates key metrics and writes them to JSON
-- Dashboard: Streamlit app reads the aggregated output and visualizes trends
-
-## Quick Start
-
-### 1) Install dependencies
-
-```bash
-python -m venv .venv
-source .venv/bin/activate   # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
+```text
+Gaming event simulator
+        │
+        ▼
+Kafka producer ──► Kafka KRaft domain topics
+                         │
+                         ▼
+             Consumer group + preprocessing ──► gaming-events.dlq
+                         │
+                         ▼
+     PostgreSQL: events, players, sessions, transactions,
+          achievements, producer/consumer metrics
+                         │
+                         ▼
+               FastAPI analytics API
+                         │
+                         ▼
+        Streamlit dark dashboard (auto-refresh)
 ```
 
-### 2) Start Kafka
+### Kafka topics
 
-```bash
-docker compose up -d
+| Topic | Event types |
+|---|---|
+| `player-events` | registration, login/logout, errors, matchmaking |
+| `game-scores` | score |
+| `transactions` | purchase |
+| `game-sessions` | session start/end |
+| `achievements` | achievement |
+| `pipeline-metrics` | producer heartbeat |
+| `gaming-events.dlq` | invalid JSON, schema, or routing records |
+
+Game events are keyed by `user_id`, preserving a player's order within an individual topic partition. The producer uses one in-flight request per broker connection so retries do not reorder sends. Kafka does not provide a total order across topics.
+
+### Validation and delivery behavior
+
+- Every accepted event requires a supported type, non-empty player ID, and timezone-aware timestamp. The simulator emits a registration event the first time each simulated player appears.
+- Scores, purchase amounts, achievements, and matchmaking results have type-specific checks.
+- Region and game identifiers are trimmed/lowercased; missing values become `unknown`.
+- If `event_id` is absent, a SHA-256 ID is generated from canonical JSON. Repeated IDs are skipped.
+- Invalid records are sent to the DLQ with the source payload and rejection reason.
+- The consumer commits offsets after persistence and DLQ publishing. PostgreSQL's event-ID primary key makes redelivery idempotent. This is at-least-once processing with deduplicated database effects, not end-to-end exactly-once processing.
+
+## Dashboard
+
+The dark dashboard refreshes by calling FastAPI at a configurable interval. It includes:
+
+1. Registered and active players, event and session counts, mean score, transaction count, observed throughput, and processing latency.
+2. Recent player activity and events per second.
+3. Top-10 leaderboard and game comparison.
+4. Engagement, daily and weekly trends, transaction trends, and session-duration distribution.
+5. Consumer batch performance, producer and consumer heartbeats, and Kafka consumer-group lag.
+
+The dashboard reports unavailable API/broker errors explicitly rather than displaying a healthy-looking fallback.
+
+## Database design
+
+SQLAlchemy creates the following PostgreSQL tables at service startup:
+
+- `players`: first/last seen, registration time, online status, event count, cumulative score.
+- `gaming_events`: unique event ID, event/processing time, topic, player/game/region, payload, and processing latency.
+- `game_sessions`: start/end and duration.
+- `transactions`: amount and occurrence time, linked to the source event.
+- `player_achievements`: achievement facts, linked to the source event.
+- `pipeline_metrics`: producer/consumer throughput, invalid/duplicate counts, and batch latency.
+
+The project uses `create_all` for the teaching prototype. Use versioned migrations (for example Alembic) before evolving a production schema.
+
+## Run locally with Docker Compose
+
+Docker Desktop (with Compose v2) is required.
+
+```powershell
+py -3.13 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+docker compose up --build
 ```
 
-### 3) Run the producer
+Compose starts a one-broker Kafka KRaft cluster, PostgreSQL, a one-shot database initializer, the consumer, continuous simulator (20 events/s target), API, and dashboard. Once services are healthy:
 
-```bash
-python src/producer.py --count 200 --sleep 0.2
-```
+- Dashboard: <http://localhost:8501>
+- API health: <http://localhost:8000/health>
+- Interactive API docs: <http://localhost:8000/docs>
 
-### 4) Run the consumer
+Stop the stack with `Ctrl+C` or `docker compose down`. `docker compose down -v` also removes the local Kafka/PostgreSQL data volumes.
 
-```bash
-python src/consumer.py
-```
+### Run services separately
 
-### 5) Launch the dashboard
+For development, start Kafka and PostgreSQL first, then activate the virtual environment. Defaults connect to local ports; set `$env:DATABASE_URL` and `$env:KAFKA_BOOTSTRAP_SERVERS` in PowerShell if your local ports or credentials differ. Run each process in a separate terminal:
 
-```bash
+```powershell
+python -m src.consumer
+python -m src.producer --rate 20
+uvicorn src.api:app --reload
 streamlit run src/dashboard.py
 ```
 
-## Offline Demo
+Generate a bounded, seedable batch instead of continuous traffic:
 
-If Kafka is not available, you can still generate a sample snapshot locally:
-
-```bash
-python src/consumer.py --demo
+```powershell
+python -m src.producer --count 20000 --rate 500 --seed 42
 ```
 
-Then open the dashboard with:
+When using the Compose broker from the host, use `localhost:9092`; application containers use `kafka:29092`.
 
-```bash
-streamlit run src/dashboard.py
+## Configuration
+
+Settings are environment variables; defaults are documented in [.env.example](.env.example).
+
+| Variable | Default | Description |
+|---|---|---|
+| `KAFKA_BOOTSTRAP_SERVERS` | `localhost:9092` | Comma-separated broker addresses |
+| `DATABASE_URL` | local PostgreSQL URL | SQLAlchemy database connection |
+| `CONSUMER_GROUP_ID` | `gaming-events-processor` | Consumer group name |
+| `ACTIVE_WINDOW_MINUTES` | `5` | Window for counting recently active, online players |
+| `API_BASE_URL` | `http://localhost:8000` | Dashboard's API endpoint |
+| `EVENT_RATE` | `20` | Producer target events per second |
+| `SIMULATED_PLAYERS` | `250` | Simulated player population |
+
+The Compose credentials and plaintext listeners are for a local development demonstration only. Do not expose them to the Internet or reuse them in production.
+
+## Testing and performance evaluation
+
+Run automated tests:
+
+```powershell
+python -m pytest -q
 ```
 
-## Files
+Run a repeatable local preprocessing/database microbenchmark:
 
-- `src/producer.py` – emits gaming events to Kafka
-- `src/consumer.py` – consumes events and stores aggregated metrics
-- `src/metrics.py` – KPI aggregation logic
-- `src/dashboard.py` – Streamlit visualization layer
-- `docker-compose.yml` – Kafka/Zookeeper setup
-- `tests/test_metrics.py` – unit tests for metric calculations
+```powershell
+python -m scripts.benchmark --count 1000 --seed 42 --output results/local-benchmark.json
+```
 
-## Environment Notes
+This benchmark uses in-memory SQLite by default and measures the local Python preprocessing and relational-write path. It deliberately does **not** measure Kafka, network delay, the Compose PostgreSQL service, or dashboard rendering. It injects known malformed records, duplicate IDs, and missing categorical fields, and reports those counts alongside throughput, latency, CPU time, and traced Python memory. A measured result is meaningful only with its machine and database details.
 
-This project is configured for Python 3.13. The dashboard intentionally avoids a pandas dependency to keep the environment portable and installation simple on Windows.
+For API response-time checks, run the stack and pass `--api-url http://localhost:8000`. For a streaming experiment, stop Compose's continuous producer, run the bounded producer at a declared rate, and record the API's observed processing throughput, latency, Kafka lag, CPU, and memory over repeated trials. Do not report the configured producer rate as measured throughput.
 
-## Example KPIs
+**Current validation limitation:** Docker is unavailable in the authoring environment, so the Kafka/PostgreSQL Compose deployment and distributed performance experiment have not been run here. A five-trial local SQLite microbenchmark was measured and is documented in [docs/performance-evaluation.md](docs/performance-evaluation.md); it is not an end-to-end Kafka result.
 
-- Concurrent users
-- Matchmaking latency
-- Regional load
-- Error rate percentage
-- Virtual economy value processed
+## Project structure
 
-## Notes
+```text
+.
+├── .streamlit/
+│   └── config.toml
+├── .env.example
+├── Dockerfile
+├── docker-compose.yml
+├── docs/
+│   ├── architecture.md
+│   ├── performance-evaluation.md
+│   └── research-paper.md
+├── scripts/
+│   └── benchmark.py
+├── src/
+│   ├── __init__.py
+│   ├── api.py
+│   ├── config.py
+│   ├── consumer.py
+│   ├── dashboard.py
+│   ├── metrics.py
+│   ├── preprocessing.py
+│   ├── producer.py
+│   └── storage.py
+└── tests/
+    ├── test_metrics.py
+    └── test_pipeline.py
+```
 
-This project is intentionally lightweight and meant as a prototype/reference implementation for academic or learning purposes.
+`src/metrics.py` and `tests/test_metrics.py` preserve the original snapshot-aggregator prototype; the live Compose pipeline and dashboard use PostgreSQL-backed analytics in `src/storage.py` and `src/api.py`.

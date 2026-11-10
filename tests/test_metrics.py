@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta, timezone
 
+from src.consumer import consume_events
 from src.metrics import GameMetricsAggregator
 
 
@@ -27,3 +28,21 @@ def test_aggregator_tracks_players_and_economy():
     assert snapshot["error_rate_percent"] > 0
     assert snapshot["matchmaking_wait_ms"] > 0
     assert snapshot["region_usage"]["us-east"] == 1
+
+
+def test_aggregator_keeps_region_counts_in_sync_when_session_region_changes():
+    aggregator = GameMetricsAggregator()
+
+    aggregator.handle_event({"type": "session_start", "user_id": "u1", "region": "us-east", "timestamp": "2024-01-01T00:00:00+00:00"})
+    aggregator.handle_event({"type": "session_start", "user_id": "u2", "region": "europe-west", "timestamp": "2024-01-01T00:00:05+00:00"})
+    aggregator.handle_event({"type": "session_end", "user_id": "u1", "region": "europe-west", "timestamp": "2024-01-01T00:01:00+00:00"})
+
+    snapshot = aggregator.snapshot()
+
+    assert snapshot["concurrent_users"] == 1
+    assert snapshot["region_usage"]["us-east"] == 0
+    assert snapshot["region_usage"]["europe-west"] == 1
+
+
+def test_consumer_module_imports_without_script_relative_path_errors():
+    assert consume_events is not None

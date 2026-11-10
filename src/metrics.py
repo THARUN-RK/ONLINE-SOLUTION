@@ -9,6 +9,7 @@ class GameMetricsAggregator:
     def __init__(self) -> None:
         self.players_online = 0
         self.online_users: set[str] = set()
+        self.user_regions: Dict[str, str] = {}
         self.region_users: Dict[str, int] = defaultdict(int)
         self.region_queue_ms: Dict[str, List[float]] = defaultdict(list)
         self.economy_volume = 0.0
@@ -44,22 +45,36 @@ class GameMetricsAggregator:
 
     def handle_event(self, event: Dict[str, Any]) -> None:
         self.total_events += 1
-        self.last_seen = self._now()
+        event_timestamp = event.get("timestamp")
+        if isinstance(event_timestamp, str) and event_timestamp:
+            self.last_seen = event_timestamp
+        else:
+            self.last_seen = self._now()
+
         event_type = event.get("type")
         region = str(event.get("region", "unknown"))
 
         if event_type == "session_start":
-            user_id = str(event.get("user_id"))
+            user_id = str(event.get("user_id", "")).strip()
+            if not user_id:
+                return
             if user_id not in self.online_users:
                 self.online_users.add(user_id)
+                self.user_regions[user_id] = region
                 self.players_online = len(self.online_users)
                 self.region_users[region] += 1
         elif event_type == "session_end":
-            user_id = str(event.get("user_id"))
+            user_id = str(event.get("user_id", "")).strip()
+            if not user_id:
+                return
             if user_id in self.online_users:
                 self.online_users.remove(user_id)
                 self.players_online = len(self.online_users)
-                self.region_users[region] = max(self.region_users.get(region, 0) - 1, 0)
+                user_region = self.user_regions.pop(user_id, region)
+                self.region_users[user_region] = max(self.region_users.get(user_region, 0) - 1, 0)
+            elif user_id in self.user_regions:
+                user_region = self.user_regions.pop(user_id)
+                self.region_users[user_region] = max(self.region_users.get(user_region, 0) - 1, 0)
         elif event_type == "matchmaking_request":
             pass
         elif event_type == "match_found":
@@ -70,8 +85,9 @@ class GameMetricsAggregator:
                     requested_ts = datetime.fromisoformat(requested_at)
                     matched_ts = datetime.fromisoformat(matched_at)
                     wait_ms = (matched_ts - requested_ts).total_seconds() * 1000
-                    self.matchmaking_waits.append(float(wait_ms))
-                    self.region_queue_ms[region].append(float(wait_ms))
+                    if wait_ms >= 0:
+                        self.matchmaking_waits.append(float(wait_ms))
+                        self.region_queue_ms[region].append(float(wait_ms))
                 except ValueError:
                     pass
         elif event_type == "purchase":
