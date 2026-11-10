@@ -1,0 +1,120 @@
+{
+  "scope": "Measured local preprocessing and database microbenchmark; excludes Kafka, network, and dashboard rendering.",
+  "generated_at_utc": "2026-11-10T07:32:26.519574+00:00",
+  "runs": [
+    {
+      "events": 1000,
+      "trial": 1,
+      "report": {
+        "scope": "local Python preprocessing and relational storage; excludes Kafka, network, and dashboard rendering",
+        "measured_at_utc": "2026-11-10T07:31:39.699027+00:00",
+        "environment": {
+          "python": "3.13.12",
+          "platform": "Windows-11-10.0.26300-SP0",
+          "database_dialect": "sqlite+pysqlite",
+          "seed": 42,
+          "configured_base_events": 1000,
+          "raw_records_including_injected_duplicates": 1011,
+          "simulated_players": 250
+        },
+        "data_quality": {
+          "expected_valid_unique": 989,
+          "observed_valid_unique": 989,
+          "expected_invalid": 11,
+          "observed_invalid": 11,
+          "expected_duplicates": 11,
+          "observed_duplicates": 11,
+          "classification_accuracy_percent": 100.0,
+          "duplicate_detection_rate_percent": 100.0,
+          "missing_categorical_fields_injected": 134,
+          "missing_categorical_fields_imputed": 134
+        },
+        "performance": {
+          "wall_clock_seconds": 5.057105,
+          "preprocessing_ms": 49.66,
+          "stored_events": 989,
+          "stored_events_per_second": 195.57,
+          "database_processing_latency_median_ms": 3.308,
+          "database_processing_latency_p95_ms": 6.473,
+          "process_cpu_seconds": 4.90625,
+          "process_cpu_percent_of_one_core": 97.02,
+          "peak_traced_python_memory_bytes": 2536193,
+          "memory_note": "tracemalloc excludes native NumPy, pandas, and database-driver allocations"
+        }
+      }
+    },
+    {
+      "events": 10000,
+      "trial": 1,
+      "report": {
+        "scope": "local Python preprocessing and relational storage; excludes Kafka, network, and dashboard rendering",
+        "measured_at_utc": "2026-11-10T07:32:26.513899+00:00",
+        "environment": {
+          "python": "3.13.12",
+          "platform": "Windows-11-10.0.26300-SP0",
+          "database_dialect": "sqlite+pysqlite",
+          "seed": 42,
+          "configured_base_events": 10000,
+          "raw_records_including_injected_duplicates": 10112,
+          "simulated_players": 250
+        },
+        "data_quality": {
+          "expected_valid_unique": 9896,
+          "observed_valid_unique": 9896,
+          "expected_invalid": 104,
+          "observed_invalid": 104,
+          "expected_duplicates": 112,
+          "observed_duplicates": 112,
+          "classification_accuracy_percent": 100.0,
+          "duplicate_detection_rate_percent": 100.0,
+          "missing_categorical_fields_injected": 1344,
+          "missing_categorical_fields_imputed": 1344
+        },
+        "performance": {
+          "wall_clock_seconds": 46.297021,
+          "preprocessing_ms": 430.808,
+          "stored_events": 9896,
+          "stored_events_per_second": 213.75,
+          "database_processing_latency_median_ms": 3.03,
+          "database_processing_latency_p95_ms": 6.04,
+          "process_cpu_seconds": 44.953125,
+          "process_cpu_percent_of_one_core": 97.1,
+          "peak_traced_python_memory_bytes": 24062560,
+          "memory_note": "tracemalloc excludes native NumPy, pandas, and database-driver allocations"
+        }
+      }
+    }
+  ],
+  "summary": [
+    {
+      "events": 1000,
+      "trials": 1,
+      "median_throughput_events_per_second": 195.57,
+      "min_throughput_events_per_second": 195.57,
+      "max_throughput_events_per_second": 195.57,
+      "median_database_p95_latency_ms": 6.473,
+      "median_peak_traced_python_memory_bytes": 2536193,
+      "all_trials_duplicate_detection_rate_percent": [
+        100.0
+      ],
+      "all_trials_invalid_detection": [
+        true
+      ]
+    },
+    {
+      "events": 10000,
+      "trials": 1,
+      "median_throughput_events_per_second": 213.75,
+      "min_throughput_events_per_second": 213.75,
+      "max_throughput_events_per_second": 213.75,
+      "median_database_p95_latency_ms": 6.04,
+      "median_peak_traced_python_memory_bytes": 24062560,
+      "all_trials_duplicate_detection_rate_percent": [
+        100.0
+      ],
+      "all_trials_invalid_detection": [
+        true
+      ]
+    }
+  ]
+}

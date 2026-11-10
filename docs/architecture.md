@@ -24,7 +24,7 @@ flowchart LR
     CONSUMER["Consumer group<br/>poll · validate · deduplicate"]
     PRE["Preprocessing<br/>Pydantic + pandas"]
     DB[("PostgreSQL<br/>events · players · sessions<br/>transactions · achievements · metrics")]
-    API["FastAPI<br/>analytics · health · Kafka lag"]
+    API["FastAPI<br/>Basic auth · analytics · health · Kafka lag"]
     DASH["Streamlit dashboard<br/>auto-refresh · Plotly"]
     SIM --> PRODUCER
     PRODUCER --> P
@@ -44,7 +44,7 @@ flowchart LR
     PRE -->|invalid payloads| D
     CONSUMER -->|commit after persistence| KAFKA
     DB --> API
-    API --> DASH
+    API -->|authenticated analytics| DASH
 ```
 
 ## Data-flow diagram

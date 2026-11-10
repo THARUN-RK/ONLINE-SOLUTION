@@ -91,6 +91,12 @@ Docker Desktop (with Compose v2) is required.
 py -3.13 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
+Copy-Item .env.example .env
+```
+
+Edit `.env` and set `DASHBOARD_USERNAME` and `DASHBOARD_PASSWORD` before starting the stack. For example, generate a URL-safe random password with `python -c "import secrets; print(secrets.token_hex(24))"`.
+
+```powershell
 docker compose up --build
 ```
 
@@ -100,11 +106,13 @@ Compose starts a one-broker Kafka KRaft cluster, PostgreSQL, a one-shot database
 - API health: <http://localhost:8000/health>
 - Interactive API docs: <http://localhost:8000/docs>
 
+The dashboard prompts for the configured account. Analytics and monitoring API routes require HTTP Basic authentication; `/health` is public. This is a local research setup: Basic authentication uses plaintext HTTP, so do not expose the services publicly without TLS and production-grade identity management.
+
 Stop the stack with `Ctrl+C` or `docker compose down`. `docker compose down -v` also removes the local Kafka/PostgreSQL data volumes.
 
 ### Run services separately
 
-For development, start Kafka and PostgreSQL first, then activate the virtual environment. Defaults connect to local ports; set `$env:DATABASE_URL` and `$env:KAFKA_BOOTSTRAP_SERVERS` in PowerShell if your local ports or credentials differ. Run each process in a separate terminal:
+For development, start Kafka and PostgreSQL first, then activate the virtual environment. Defaults connect to local ports; set `$env:DATABASE_URL`, `$env:KAFKA_BOOTSTRAP_SERVERS`, `$env:DASHBOARD_USERNAME`, and `$env:DASHBOARD_PASSWORD` in PowerShell before starting the API and dashboard. Run each process in a separate terminal:
 
 ```powershell
 python -m src.consumer
@@ -123,7 +131,7 @@ When using the Compose broker from the host, use `localhost:9092`; application c
 
 ## Configuration
 
-Settings are environment variables; defaults are documented in [.env.example](.env.example).
+Settings are environment variables; defaults are documented in [.env.example](.env.example). Set `KAFKA_PARTITIONS` to configure the broker's default partition count for newly created topics.
 
 | Variable | Default | Description |
 |---|---|---|
@@ -134,6 +142,9 @@ Settings are environment variables; defaults are documented in [.env.example](.e
 | `API_BASE_URL` | `http://localhost:8000` | Dashboard's API endpoint |
 | `EVENT_RATE` | `20` | Producer target events per second |
 | `SIMULATED_PLAYERS` | `250` | Simulated player population |
+| `KAFKA_PARTITIONS` | `3` | Default partitions for newly created Kafka topics |
+| `DASHBOARD_USERNAME` | required | Single configured dashboard/API account |
+| `DASHBOARD_PASSWORD` | required | Password for the configured dashboard/API account |
 
 The Compose credentials and plaintext listeners are for a local development demonstration only. Do not expose them to the Internet or reuse them in production.
 
@@ -155,6 +166,28 @@ This benchmark uses in-memory SQLite by default and measures the local Python pr
 
 For API response-time checks, run the stack and pass `--api-url http://localhost:8000`. For a streaming experiment, stop Compose's continuous producer, run the bounded producer at a declared rate, and record the API's observed processing throughput, latency, Kafka lag, CPU, and memory over repeated trials. Do not report the configured producer rate as measured throughput.
 
+Run the requested local scale comparison (1,000 through 500,000 base events; five trials by default) and generate a JSON report, CSV comparison table, and self-contained Plotly graph:
+
+```powershell
+python -m scripts.evaluate --repeats 5
+```
+
+The largest trial can take substantial time and memory because it measures the local preprocessing plus SQLite write path. Start with `python -m scripts.evaluate --sizes 1000,10000 --repeats 1` to validate the workflow. Outputs contain only completed measurements; the runner never fills missing results with estimates. These local runs do not measure Kafka/PostgreSQL end-to-end performance.
+
+Replay the bundled sample JSONL data to Kafka:
+
+```powershell
+python -m scripts.replay_sample
+```
+
+Run an authenticated Locust API load test after starting the stack. Use the same account configured in `.env`:
+
+```powershell
+$env:DASHBOARD_USERNAME = "your-configured-user"
+$env:DASHBOARD_PASSWORD = "your-configured-password"
+locust -f scripts/locustfile.py --host http://localhost:8000
+```
+
 **Current validation limitation:** Docker is unavailable in the authoring environment, so the Kafka/PostgreSQL Compose deployment and distributed performance experiment have not been run here. A five-trial local SQLite microbenchmark was measured and is documented in [docs/performance-evaluation.md](docs/performance-evaluation.md); it is not an end-to-end Kafka result.
 
 ## Project structure
@@ -171,7 +204,16 @@ For API response-time checks, run the stack and pass `--api-url http://localhost
 │   ├── performance-evaluation.md
 │   └── research-paper.md
 ├── scripts/
-│   └── benchmark.py
+│   ├── benchmark.py
+│   ├── evaluate.py
+│   ├── locustfile.py
+│   └── replay_sample.py
+├── data/
+│   └── sample_events.jsonl
+├── results/
+│   ├── local-scale-smoke.csv
+│   ├── local-scale-smoke.html
+│   └── local-scale-smoke.json
 ├── src/
 │   ├── __init__.py
 │   ├── api.py

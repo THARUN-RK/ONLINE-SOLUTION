@@ -1,0 +1,8 @@
+{"event_id":"sample-register-001","schema_version":1,"timestamp":"2026-11-10T12:00:00+00:00","type":"player_register","user_id":"sample-player-001","region":"us-east","game_id":"arena-legends"}
+{"event_id":"sample-login-001","schema_version":1,"timestamp":"2026-11-10T12:00:05+00:00","type":"player_login","user_id":"sample-player-001","region":"us-east","game_id":"arena-legends"}
+{"event_id":"sample-session-start-001","schema_version":1,"timestamp":"2026-11-10T12:01:00+00:00","type":"session_start","user_id":"sample-player-001","region":"us-east","game_id":"arena-legends","session_id":"sample-session-001"}
+{"event_id":"sample-score-001","schema_version":1,"timestamp":"2026-11-10T12:02:00+00:00","type":"score","user_id":"sample-player-001","region":"us-east","game_id":"arena-legends","score":875}
+{"event_id":"sample-purchase-001","schema_version":1,"timestamp":"2026-11-10T12:03:00+00:00","type":"purchase","user_id":"sample-player-001","region":"us-east","game_id":"arena-legends","amount":4.99}
+{"event_id":"sample-achievement-001","schema_version":1,"timestamp":"2026-11-10T12:04:00+00:00","type":"achievement","user_id":"sample-player-001","region":"us-east","game_id":"arena-legends","achievement_name":"first-win"}
+{"event_id":"sample-session-end-001","schema_version":1,"timestamp":"2026-11-10T12:15:00+00:00","type":"session_end","user_id":"sample-player-001","region":"us-east","game_id":"arena-legends","session_id":"sample-session-001","duration_seconds":840}
+{"event_id":"sample-logout-001","schema_version":1,"timestamp":"2026-11-10T12:15:05+00:00","type":"player_logout","user_id":"sample-player-001","region":"us-east","game_id":"arena-legends"}

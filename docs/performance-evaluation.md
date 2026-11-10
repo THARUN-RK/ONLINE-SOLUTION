@@ -26,6 +26,17 @@ Values below are the median and range across the five observed trials. They are 
 
 `tracemalloc` does not include native NumPy, pandas, or database-driver allocations. The CPU percentage is normalized to one core, and may vary with scheduling. Synthetic classification accuracy measures only injected examples in this known test set; it is not an estimate of accuracy on real gaming telemetry. The small test is not a scaling benchmark.
 
+## Additional measured smoke sweep
+
+The evaluation runner was also executed once each at 1,000 and 10,000 configured base events on the same Python 3.13.12 / Windows 11 host using in-memory SQLite. These are single-run smoke measurements, not medians or statistically robust performance claims.
+
+| Base events | Unique valid stored | Invalid detected | Duplicates detected | Throughput (events/s) | Database p95 latency (ms) | Peak traced Python memory (bytes) |
+|---:|---:|---:|---:|---:|---:|---:|
+| 1,000 | 989 | 11 / 11 | 11 / 11 | 195.57 | 6.473 | 2,536,193 |
+| 10,000 | 9,896 | 104 / 104 | 112 / 112 | 213.75 | 6.040 | 24,062,560 |
+
+The measured run records, comparison table, and self-contained graph are [local-scale-smoke.json](../results/local-scale-smoke.json), [local-scale-smoke.csv](../results/local-scale-smoke.csv), and [local-scale-smoke.html](../results/local-scale-smoke.html). The 50,000, 100,000, and 500,000 runs have **not** been executed in this environment; use the documented evaluation runner to collect them rather than extrapolating these measurements.
+
 ## Not measured
 
 Kafka producer-to-consumer latency and throughput, PostgreSQL performance, dashboard response time, consumer lag under load, multi-consumer scaling, broker failure recovery, and full-host CPU/RSS remain **not measured**. Docker was unavailable in the authoring environment. Do not copy the local SQLite measurements into a claim about a Kafka/PostgreSQL deployment.
@@ -40,3 +51,5 @@ Kafka producer-to-consumer latency and throughput, PostgreSQL performance, dashb
 6. Publish raw run records and aggregate medians/ranges. Do not equate producer target rate with achieved throughput.
 
 For API response-time checks, use `python -m scripts.benchmark --count 1000 --seed 42 --api-url http://localhost:8000`; this adds HTTP request measurements against the running API but still does not make the local SQLite portion an end-to-end Kafka benchmark.
+
+The repeatable scale runner is `python -m scripts.evaluate`. By default it runs five local SQLite trials at 1,000, 10,000, 50,000, 100,000, and 500,000 base events, saving only observed run records plus a CSV comparison and Plotly HTML graph. The generated files are measurements from that execution environment; they do not represent Kafka/PostgreSQL results. Use `--sizes` and `--repeats` for a smaller smoke run before starting the full experiment.

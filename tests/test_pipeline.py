@@ -1,5 +1,7 @@
+import base64
 import json
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
@@ -14,7 +16,7 @@ from src.config import (
 )
 from src.consumer import process_batch
 from src.producer import GamingEventGenerator, produce_events
-from src.preprocessing import preprocess_batch
+from src.preprocessing import preprocess_batch, topic_for_event
 from src.storage import (
     GameSession,
     GamingEventRecord,
@@ -36,6 +38,11 @@ def _event(event_type: str, **fields: object) -> dict[str, object]:
     }
     event.update(fields)
     return event
+
+
+def _basic_auth_headers(username: str, password: str) -> dict[str, str]:
+    token = base64.b64encode(f"{username}:{password}".encode()).decode("ascii")
+    return {"Authorization": f"Basic {token}"}
 
 
 def _database():
@@ -176,6 +183,24 @@ def test_simulator_registers_a_player_before_emitting_gameplay():
     assert event["type"] == "player_register"
 
 
+def test_bundled_sample_dataset_contains_valid_topic_routable_events():
+    sample_path = Path(__file__).resolve().parents[1] / "data" / "sample_events.jsonl"
+    raw_events = [json.loads(line) for line in sample_path.read_text(encoding="utf-8").splitlines()]
+
+    result = preprocess_batch(raw_events)
+
+    assert len(result.events) == 8
+    assert result.invalid == []
+    assert result.duplicates == 0
+    assert {topic_for_event(event) for event in result.events} == {
+        "player-events",
+        "game-scores",
+        "transactions",
+        "game-sessions",
+        "achievements",
+    }
+
+
 def test_producer_reports_broker_acknowledged_counts(monkeypatch):
     class FakeFuture:
         def add_callback(self, callback):
@@ -224,6 +249,8 @@ def test_producer_reports_broker_acknowledged_counts(monkeypatch):
 
 
 def test_api_serves_required_analytics_from_processed_events(monkeypatch):
+    monkeypatch.setenv("DASHBOARD_USERNAME", "researcher")
+    monkeypatch.setenv("DASHBOARD_PASSWORD", "test-password")
     engine = _database()
     start_time = datetime.now(timezone.utc) - timedelta(seconds=120)
     payloads = [
@@ -253,7 +280,7 @@ def test_api_serves_required_analytics_from_processed_events(monkeypatch):
     process_batch(engine, records)
     app = create_app(engine)
 
-    with TestClient(app) as client:
+    with TestClient(app, headers=_basic_auth_headers("researcher", "test-password")) as client:
         summary = client.get("/api/v1/analytics/summary")
         leaderboard = client.get("/api/v1/analytics/leaderboard")
         games = client.get("/api/v1/analytics/games")
@@ -284,3 +311,27 @@ def test_api_serves_required_analytics_from_processed_events(monkeypatch):
     assert performance.json()["measured_events"] == 6
     assert monitoring.json()["kafka"]["status"] == "connected"
     assert health.json()["database"] == "connected"
+
+
+def test_analytics_api_requires_configured_basic_auth(monkeypatch):
+    engine = _database()
+    app = create_app(engine)
+
+    monkeypatch.delenv("DASHBOARD_USERNAME", raising=False)
+    monkeypatch.delenv("DASHBOARD_PASSWORD", raising=False)
+    with TestClient(app) as client:
+        assert client.get("/health").status_code == 200
+        assert client.get("/api/v1/analytics/summary").status_code == 503
+
+    monkeypatch.setenv("DASHBOARD_USERNAME", "researcher")
+    monkeypatch.setenv("DASHBOARD_PASSWORD", "test-password")
+    with TestClient(app) as client:
+        assert client.get("/api/v1/analytics/summary").status_code == 401
+        assert client.get(
+            "/api/v1/analytics/summary",
+            headers=_basic_auth_headers("researcher", "incorrect-password"),
+        ).status_code == 401
+        assert client.get(
+            "/api/v1/analytics/summary",
+            headers=_basic_auth_headers("researcher", "test-password"),
+        ).status_code == 200

@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import os
+import secrets
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import numpy as np
 import pandas as pd
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from kafka import KafkaConsumer, TopicPartition
 from kafka.errors import KafkaError
 from sqlalchemy import func, select, text
@@ -43,6 +46,40 @@ EVENT_TOPICS = (
     TOPIC_GAME_SESSIONS,
     TOPIC_ACHIEVEMENTS,
 )
+_http_basic = HTTPBasic(auto_error=False)
+
+
+def require_dashboard_auth(
+    credentials: HTTPBasicCredentials | None = Depends(_http_basic),
+) -> None:
+    username = os.getenv("DASHBOARD_USERNAME", "")
+    password = os.getenv("DASHBOARD_PASSWORD", "")
+    if not username or not password:
+        raise HTTPException(status_code=503, detail="dashboard authentication is not configured")
+    if credentials is None:
+        raise HTTPException(
+            status_code=401,
+            detail="authentication required",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+
+    username_matches = secrets.compare_digest(
+        credentials.username.encode("utf-8"),
+        username.encode("utf-8"),
+    )
+    password_matches = secrets.compare_digest(
+        credentials.password.encode("utf-8"),
+        password.encode("utf-8"),
+    )
+    if not (username_matches and password_matches):
+        raise HTTPException(
+            status_code=401,
+            detail="invalid username or password",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+
+
+_AUTH_DEPENDENCIES = [Depends(require_dashboard_auth)]
 
 
 def _event_rows(engine: Engine, since: datetime, limit: int = 20000) -> list[dict[str, Any]]:
@@ -152,7 +189,7 @@ def create_app(engine: Engine | None = None) -> FastAPI:
             raise HTTPException(status_code=503, detail=f"database unavailable: {error}") from error
         return {"status": "healthy", "database": "connected"}
 
-    @app.get("/api/v1/analytics/summary")
+    @app.get("/api/v1/analytics/summary", dependencies=_AUTH_DEPENDENCIES)
     def summary() -> dict[str, Any]:
         now = datetime.now(timezone.utc)
         active_since = now - timedelta(minutes=ACTIVE_WINDOW_MINUTES)
@@ -205,7 +242,7 @@ def create_app(engine: Engine | None = None) -> FastAPI:
                 "active_window_minutes": ACTIVE_WINDOW_MINUTES,
             }
 
-    @app.get("/api/v1/analytics/activity")
+    @app.get("/api/v1/analytics/activity", dependencies=_AUTH_DEPENDENCIES)
     def activity() -> dict[str, list[dict[str, Any]]]:
         rows = _event_rows(database_engine, datetime.now(timezone.utc) - timedelta(hours=24))
         if not rows:
@@ -238,7 +275,7 @@ def create_app(engine: Engine | None = None) -> FastAPI:
             ],
         }
 
-    @app.get("/api/v1/analytics/leaderboard")
+    @app.get("/api/v1/analytics/leaderboard", dependencies=_AUTH_DEPENDENCIES)
     def leaderboard() -> list[dict[str, Any]]:
         with Session(database_engine) as session:
             players = session.scalars(
@@ -249,7 +286,7 @@ def create_app(engine: Engine | None = None) -> FastAPI:
             for player in players
         ]
 
-    @app.get("/api/v1/analytics/games")
+    @app.get("/api/v1/analytics/games", dependencies=_AUTH_DEPENDENCIES)
     def games() -> list[dict[str, Any]]:
         with Session(database_engine) as session:
             rows = session.execute(
@@ -270,7 +307,7 @@ def create_app(engine: Engine | None = None) -> FastAPI:
             for row in rows
         ]
 
-    @app.get("/api/v1/analytics/engagement")
+    @app.get("/api/v1/analytics/engagement", dependencies=_AUTH_DEPENDENCIES)
     def engagement() -> list[dict[str, Any]]:
         rows = _event_rows(database_engine, datetime.now(timezone.utc) - timedelta(days=7))
         if not rows:
@@ -289,7 +326,7 @@ def create_app(engine: Engine | None = None) -> FastAPI:
             for timestamp, row in daily.iterrows()
         ]
 
-    @app.get("/api/v1/analytics/trends")
+    @app.get("/api/v1/analytics/trends", dependencies=_AUTH_DEPENDENCIES)
     def trends(days: int = Query(default=30, ge=1, le=30)) -> dict[str, list[dict[str, Any]]]:
         rows = _event_rows(database_engine, datetime.now(timezone.utc) - timedelta(days=days))
         if not rows:
@@ -323,7 +360,7 @@ def create_app(engine: Engine | None = None) -> FastAPI:
             ],
         }
 
-    @app.get("/api/v1/analytics/transactions")
+    @app.get("/api/v1/analytics/transactions", dependencies=_AUTH_DEPENDENCIES)
     def transactions() -> list[dict[str, Any]]:
         since = datetime.now(timezone.utc) - timedelta(days=30)
         with Session(database_engine) as session:
@@ -349,7 +386,7 @@ def create_app(engine: Engine | None = None) -> FastAPI:
             for timestamp, row in daily.iterrows()
         ]
 
-    @app.get("/api/v1/analytics/sessions")
+    @app.get("/api/v1/analytics/sessions", dependencies=_AUTH_DEPENDENCIES)
     def sessions() -> dict[str, Any]:
         with Session(database_engine) as session:
             records = session.execute(
@@ -370,7 +407,7 @@ def create_app(engine: Engine | None = None) -> FastAPI:
             ],
         }
 
-    @app.get("/api/v1/analytics/performance")
+    @app.get("/api/v1/analytics/performance", dependencies=_AUTH_DEPENDENCIES)
     def performance() -> dict[str, Any]:
         now = datetime.now(timezone.utc)
         latencies = _processing_latencies(database_engine, now - timedelta(hours=1))
@@ -403,7 +440,7 @@ def create_app(engine: Engine | None = None) -> FastAPI:
             ],
         }
 
-    @app.get("/api/v1/monitoring")
+    @app.get("/api/v1/monitoring", dependencies=_AUTH_DEPENDENCIES)
     def monitoring() -> dict[str, Any]:
         return {
             "producer": _latest_metric(database_engine, "producer"),
@@ -412,7 +449,7 @@ def create_app(engine: Engine | None = None) -> FastAPI:
             "rate_note": "Producer rate is reported by producer heartbeats; consumer rate is the latest committed batch.",
         }
 
-    @app.get("/api/v1/analytics/achievements")
+    @app.get("/api/v1/analytics/achievements", dependencies=_AUTH_DEPENDENCIES)
     def achievements() -> list[dict[str, Any]]:
         with Session(database_engine) as session:
             rows = session.execute(

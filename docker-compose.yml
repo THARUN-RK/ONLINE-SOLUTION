@@ -18,7 +18,7 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_DEFAULT_REPLICATION_FACTOR: 1
-      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_NUM_PARTITIONS: ${KAFKA_PARTITIONS:-3}
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
     volumes:
       - kafka-data:/var/lib/kafka/data
@@ -63,6 +63,8 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://gaming:gaming@postgres:5432/gaming
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      DASHBOARD_USERNAME: ${DASHBOARD_USERNAME:?Set DASHBOARD_USERNAME in .env}
+      DASHBOARD_PASSWORD: ${DASHBOARD_PASSWORD:?Set DASHBOARD_PASSWORD in .env}
     ports:
       - "8000:8000"
     depends_on:

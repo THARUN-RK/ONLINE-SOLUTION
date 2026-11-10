@@ -40,9 +40,52 @@ with st.sidebar:
     st.caption(f"Analytics API: `{API_BASE_URL}`")
 
 
+def login() -> None:
+    st.title("🎮 Gaming Stream Analytics")
+    st.subheader("Sign in")
+    with st.form("dashboard_login"):
+        username = st.text_input("Username")
+        password = st.text_input("Password", type="password")
+        submitted = st.form_submit_button("Sign in")
+
+    if not submitted:
+        return
+    try:
+        response = requests.get(
+            f"{API_BASE_URL}/api/v1/analytics/summary",
+            auth=(username, password),
+            timeout=5,
+        )
+    except requests.RequestException as error:
+        st.error(f"Could not reach the analytics API: {error}")
+        return
+    if response.status_code == 401:
+        st.error("Invalid username or password.")
+        return
+    if response.status_code >= 400:
+        st.error(f"Sign-in failed ({response.status_code}): {response.text}")
+        return
+
+    st.session_state["api_credentials"] = (username, password)
+    st.rerun()
+
+
+if not st.session_state.get("api_credentials"):
+    login()
+    st.stop()
+
+if st.sidebar.button("Log out"):
+    del st.session_state["api_credentials"]
+    st.rerun()
+
+
 def fetch(path: str) -> Any | None:
     try:
-        response = requests.get(f"{API_BASE_URL}{path}", timeout=5)
+        response = requests.get(
+            f"{API_BASE_URL}{path}",
+            auth=st.session_state["api_credentials"],
+            timeout=5,
+        )
         response.raise_for_status()
     except requests.RequestException as error:
         st.error(f"Could not load `{path}`: {error}")

@@ -113,7 +113,7 @@ The design separates producers, stream processing, storage, and visualization; r
 
 ## XIV. Limitations
 
-The provided Compose broker and database are single instances and are not highly available. The workload is synthetic and cannot represent real player behavior or production traffic without calibration. SQLAlchemy schema creation is not a substitute for versioned migrations. The prototype uses polling and a relational read path; it does not implement a distributed stream-processing engine, event-time windows, watermarks, privacy controls, authentication, rate limiting, schema registry, or production secrets management. Per-topic ordering does not imply a global event order. Distributed performance results are environment-dependent and remain unmeasured.
+The provided Compose broker and database are single instances and are not highly available. The workload is synthetic and cannot represent real player behavior or production traffic without calibration. SQLAlchemy schema creation is not a substitute for versioned migrations. The prototype uses polling and a relational read path; it does not implement a distributed stream-processing engine, event-time windows, watermarks, rate limiting, schema registry, or production secrets management. Its environment-configured HTTP Basic account is intended only for local research use and is not a substitute for production identity management or TLS. Per-topic ordering does not imply a global event order. Distributed performance results are environment-dependent and remain unmeasured.
 
 ## XV. Future Enhancements
 
