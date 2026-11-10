@@ -1,0 +1,116 @@
+services:
+  kafka:
+    image: confluentinc/cp-kafka:7.6.1
+    hostname: kafka
+    ports:
+      - "9092:9092"
+    environment:
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:29093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,CONTROLLER://0.0.0.0:29093,PLAINTEXT_HOST://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 1
+      KAFKA_NUM_PARTITIONS: ${KAFKA_PARTITIONS:-3}
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics --bootstrap-server localhost:29092 --list >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: gaming
+      POSTGRES_USER: gaming
+      POSTGRES_PASSWORD: gaming
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gaming -d gaming"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  db-init:
+    build: .
+    command:
+      - python
+      - -c
+      - from src.storage import create_schema, make_engine; engine = make_engine(); create_schema(engine); engine.dispose()
+    environment:
+      DATABASE_URL: postgresql+psycopg://gaming:gaming@postgres:5432/gaming
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build: .
+    command: ["uvicorn", "src.api:app", "--host", "0.0.0.0", "--port", "8000"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://gaming:gaming@postgres:5432/gaming
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      DASHBOARD_USERNAME: ${DASHBOARD_USERNAME:?Set DASHBOARD_USERNAME in .env}
+      DASHBOARD_PASSWORD: ${DASHBOARD_PASSWORD:?Set DASHBOARD_PASSWORD in .env}
+    ports:
+      - "8000:8000"
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+      kafka:
+        condition: service_healthy
+    restart: unless-stopped
+
+  consumer:
+    build: .
+    command: ["python", "-m", "src.consumer"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://gaming:gaming@postgres:5432/gaming
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+      kafka:
+        condition: service_healthy
+    restart: unless-stopped
+
+  producer:
+    build: .
+    command: ["python", "-m", "src.producer", "--rate", "20"]
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      EVENT_RATE: 20
+      SIMULATED_PLAYERS: 250
+    depends_on:
+      kafka:
+        condition: service_healthy
+    restart: unless-stopped
+
+  dashboard:
+    build: .
+    command: ["streamlit", "run", "src/dashboard.py", "--server.address=0.0.0.0"]
+    environment:
+      API_BASE_URL: http://api:8000
+    ports:
+      - "8501:8501"
+    depends_on:
+      api:
+        condition: service_started
+    restart: unless-stopped
+
+volumes:
+  kafka-data:
+  postgres-data:
